@@ -1,0 +1,99 @@
+# version: "3.9" (obsolete)
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: paperclip
+      POSTGRES_PASSWORD: paperclip
+      POSTGRES_DB: paperclip
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U paperclip -d paperclip" ]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "5434:5432"  # Porta 5434 no host para evitar conflito com PostgreSQL local
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - agents_net
+
+  paperclip:
+    build:
+      context: ./paperclipai
+      dockerfile: ../Dockerfile.paperclip
+    ports:
+      - "8080:8080"
+    # Entrypoint wrapper que automatiza:
+    #   - Correção de permissões do volume /paperclip
+    #   - Onboarding automático (quickstart) na primeira execução
+    #   - Geração do invite do primeiro admin (CEO)
+    entrypoint: ["/paperclip-entrypoint.sh"]
+    command: ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
+    environment:
+      DATABASE_URL: postgres://paperclip:paperclip@db:5432/paperclip
+      PORT: "8080"
+      SERVE_UI: "true"
+      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
+      PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://localhost:8080}"
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:-BETTER_AUTH_SECRET must be set}"
+      HERMES_BASE_URL: "http://hermes:7000"
+      OPENCLAW_BASE_URL: "http://openclaw:18789"
+    volumes:
+      - paperclip-data:/paperclip
+      - ./paperclip-entrypoint.sh:/paperclip-entrypoint.sh:ro  # Monta o wrapper entrypoint
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - agents_net
+
+  hermes:
+    build:
+      context: ./hermes-agent
+      dockerfile: Dockerfile
+    ports:
+      - "7000:7000"
+    stdin_open: true
+    tty: true
+    environment:
+      # OPENAI_API_KEY: "SUA_CHAVE_OPENAI_AQUI" # Substitua pela sua chave real
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+      HERMES_ENV: "production"
+      HERMES_LOG_LEVEL: "info"
+      PAPERCLIP_BASE_URL: "http://paperclip:8080"
+      OPENCLAW_BASE_URL: "http://openclaw:18789"
+    volumes:
+      - hermes-data:/opt/hermes/data
+    networks:
+      - agents_net
+
+  openclaw:
+    build:
+      context: ./openclaw
+      dockerfile: ../Dockerfile.openclaw
+    ports:
+      - "9000:18789"
+    # O gateway do OpenClaw oficial escuta em 127.0.0.1:18789 por padrão.
+    # Com Docker bridge networking, é necessário usar --bind lan para 0.0.0.0.
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan"]
+    environment:
+      NODE_ENV: "production"
+      OPENCLAW_LOG_LEVEL: "info"
+      # OPENCLAW_API_KEY: "SUA_CHAVE_OPENCLAW_AQUI" # Opcional: chave para plugins externos
+    volumes:
+      - ./workspace:/workspace
+      - openclaw-data:/home/node/.openclaw
+    networks:
+      - agents_net
+
+networks:
+  agents_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  paperclip-data:
+  hermes-data:
+  openclaw-data:
