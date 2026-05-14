@@ -1,4 +1,4 @@
-# Agent Orchestrator Setup
+# PaperClipAi + Hermes Agent + OpenClaw
 
 Este repositório contém a infraestrutura Docker Compose para rodar o ecossistema PaperclipAi, Hermes Agent e OpenClaw com automação de onboarding e segurança.
 
