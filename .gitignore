@@ -1,0 +1,12 @@
+.env
+paperclipai/
+hermes-agent/
+openclaw/
+workspace/
+pgdata/
+paperclip-data/
+hermes-data/
+openclaw-data/
+node_modules/
+.DS_Store
+*.bak
